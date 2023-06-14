@@ -51,7 +51,7 @@ func sanitizeInput(user *model.User) {
 	user.Email = strings.ToLower(strings.TrimSpace(user.Email))
 }
 
-func hashPassword(user *model.User) ([]byte, error) {
+func HashPassword(user *model.User) ([]byte, error) {
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(user.PasswordHash), bcrypt.DefaultCost)
 	if err != nil {
 		logs.Error("Error hashing password", err)
@@ -61,39 +61,32 @@ func hashPassword(user *model.User) ([]byte, error) {
 	return hashedPassword, err
 }
 
+func CheckPassword(hashedPassword, password string) bool {
+	err := bcrypt.CompareHashAndPassword([]byte(hashedPassword), []byte(password))
+	return err == nil
+}
+
 func (s *UserService) CreateUser(user *model.User) error {
 	// Validate input
-	err := validateInput(user)
-	if err != nil {
-		return errors.NewAppError(errors.CodeInternalServerError, "Internal server error occurred")
+	if err := validateInput(user); err != nil {
+		return errors.NewAppError(errors.CodeBadRequest, "Invalid user data")
 	}
 
 	// Sanitize input
 	sanitizeInput(user)
 
 	// Check if username already exists
-	existingUser, err := s.UserRepo.GetUserByUsername(user.Username)
-	if err != nil {
+	if existingUser, err := s.UserRepo.GetUserByUsername(user.Username); err != nil {
 		logs.Error("Error fetching user by username", err)
-		return errors.NewAppError(errors.CodeInternalServerError, "Internal server error occurred")
-	}
-	if existingUser != nil {
-		logs.Error(fmt.Sprintf("Username already exists: %s", user.Username))
+		return errors.NewAppError(errors.CodeInternalServerError, "An unexpected error occurred")
+	} else if existingUser != nil {
 		return errors.NewAppError(errors.CodeBadRequest, "Username already exists")
 	}
 
-	// Hash password
-	hashedPassword, err := hashPassword(user)
-	if err != nil {
-		return err
-	}
-	user.PasswordHash = string(hashedPassword)
-
 	// Create the user
-	err = s.UserRepo.CreateUser(user)
-	if err != nil {
+	if err := s.UserRepo.CreateUser(user); err != nil {
 		logs.Error("Error creating user", err)
-		return errors.NewAppError(errors.CodeInternalServerError, "Internal server error occurred")
+		return errors.NewAppError(errors.CodeInternalServerError, "An unexpected error occurred")
 	}
 
 	return nil
@@ -143,13 +136,6 @@ func (s *UserService) UpdateUser(user *model.User) error {
 		logs.Error(fmt.Sprintf("Username already exists: %s", user.Username))
 		return errors.NewAppError(errors.CodeBadRequest, "Username already exists")
 	}
-
-	// Hash password
-	hashedPassword, err := hashPassword(user)
-	if err != nil {
-		return err
-	}
-	user.PasswordHash = string(hashedPassword)
 
 	// Update the user
 	err = s.UserRepo.UpdateUser(user)

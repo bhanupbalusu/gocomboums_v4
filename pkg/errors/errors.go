@@ -15,6 +15,7 @@ type AppError struct {
 const (
 	CodeInternalServerError = 500
 	CodeBadRequest          = 400
+	CodeUnauthorized        = 401
 	CodeNotFound            = 404
 )
 
